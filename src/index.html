@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryptoGig - Truffle & Ganache Escrow</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f4f6f8; }
+        .card { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        button { background-color: #007bff; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        input { padding: 8px; margin-right: 10px; border: 1px solid #ccc; border-radius: 4px; width: 250px; }
+        .status { margin-top: 10px; font-weight: bold; color: #28a745; }
+    </style>
+</head>
+<body>
+    <h1>CryptoGig Escrow (Ganache Local)</h1>
+    
+    <div class="card">
+        <button id="connectBtn">Connect MetaMask</button>
+        <p id="walletAddress">Not connected</p>
+    </div>
+
+    <div class="card">
+        <h3>1. Deposit Funds</h3>
+        <input type="text" id="freelancerAddress" placeholder="Freelancer Address (0x...)">
+        <input type="number" id="depositAmount" placeholder="Amount in ETH" step="0.01">
+        <button id="depositBtn">Deposit to Escrow</button>
+    </div>
+
+    <div class="card">
+        <h3>2. Release Funds</h3>
+        <button id="releaseBtn">Release to Freelancer</button>
+    </div>
+
+    <div class="card">
+        <h3>3. Contract Details</h3>
+        <button id="statusBtn">Check Escrow Details</button>
+        <p id="escrowStatus"></p>
+    </div>
+
+    <p id="txResult" class="status"></p>
+
+    <!-- Ethers.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+    <script>
+        
+        const contractAddress = "0xafa9D2FB1E4b5198775249033683bE3368970220";
+
+        const contractABI = [
+          { "inputs": [{ "internalType": "address payable", "name": "_freelancer", "type": "address" }], "name": "depositFunds", "outputs": [], "stateMutability": "payable", "type": "function" },
+          { "inputs": [], "name": "releaseFunds", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
+          { "inputs": [], "name": "getEscrowDetails", "outputs": [{ "internalType": "address", "name": "", "type": "address" }, { "internalType": "address", "name": "", "type": "address" }, { "internalType": "uint256", "name": "", "type": "uint256" }, { "internalType": "bool", "name": "", "type": "bool" }], "stateMutability": "view", "type": "function" }
+        ];
+
+        let provider, signer, contract;
+
+        document.getElementById('connectBtn').addEventListener('click', async () => {
+            if (window.ethereum) {
+                provider = new ethers.providers.Web3Provider(window.ethereum);
+                await provider.send("eth_requestAccounts", []);
+                signer = provider.getSigner();
+                const address = await signer.getAddress();
+                document.getElementById('walletAddress').innerText = `Connected: ${address}`;
+                contract = new ethers.Contract(contractAddress, contractABI, signer);
+            } else {
+                alert('Please install MetaMask');
+            }
+        });
+
+        document.getElementById('depositBtn').addEventListener('click', async () => {
+            try {
+                const freelancer = document.getElementById('freelancerAddress').value;
+                const amount = document.getElementById('depositAmount').value;
+                const tx = await contract.depositFunds(freelancer, { value: ethers.utils.parseEther(amount) });
+                document.getElementById('txResult').innerText = "Processing deposit...";
+                await tx.wait();
+                document.getElementById('txResult').innerText = `Successfully Deposited! Hash: ${tx.hash}`;
+            } catch (err) {
+                document.getElementById('txResult').innerText = "Error: " + err.message;
+            }
+        });
+
+        document.getElementById('releaseBtn').addEventListener('click', async () => {
+            try {
+                const tx = await contract.releaseFunds();
+                document.getElementById('txResult').innerText = "Releasing funds...";
+                await tx.wait();
+                document.getElementById('txResult').innerText = `Funds Released! Hash: ${tx.hash}`;
+            } catch (err) {
+                document.getElementById('txResult').innerText = "Error: " + err.message;
+            }
+        });
+
+        document.getElementById('statusBtn').addEventListener('click', async () => {
+            try {
+                const details = await contract.getEscrowDetails();
+                document.getElementById('escrowStatus').innerText = 
+                    `Client: ${details[0]}\nFreelancer: ${details[1]}\nLocked: ${ethers.utils.formatEther(details[2])} ETH\nCompleted: ${details[3]}`;
+            } catch (err) {
+                document.getElementById('escrowStatus').innerText = "Error fetching details.";
+            }
+        });
+    </script>
+</body>
+</html>
